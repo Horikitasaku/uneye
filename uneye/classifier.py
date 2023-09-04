@@ -52,11 +52,11 @@ class DNN():
     '''
     def __init__(self, max_iter=500, sampfreq=1000,
                  lr=0.001, weights_name='weights',
-                 min_sacc_dist=1,min_sacc_dur=6,augmentation=True,
-                 ks=5,mp=5,inf_correction=1.5,val_samples=30,
+                 min_sacc_dist=1, min_sacc_dur=6, augmentation=True,
+                 ks=5, mp=5, inf_correction=1.5, val_samples=30,
                  doDiff=True):
         
-        if max_iter<10:
+        if max_iter < 10:
             max_iter = 10
         self.max_iter = max_iter
         self.sampfreq = sampfreq
@@ -94,14 +94,14 @@ class DNN():
         classes = len(np.unique(Labels[np.isnan(Labels) == False]))
         self.net = UNet(classes, self.ks, self.mp)
 
-        print('Number of classes:',classes)
-        print('Using GPU:',self.use_gpu)
+        print('Number of classes:', classes)
+        print('Using GPU:', self.use_gpu)
         
         # check if data has right dimensions (2)
-        xdim, ydim, ldim = X.ndim,Y.ndim,Labels.ndim
-        if any((xdim!=2, ydim!=2, ldim!=2)):
+        xdim, ydim, ldim = X.ndim, Y.ndim, Labels.ndim
+        if any((xdim != 2, ydim != 2, ldim != 2)):
             # reshape into matrix with trials of length=1sec
-            trial_len = int(self.sampfreq)  #trials of 1 sec
+            trial_len = int(self.sampfreq)  # trials of 1 sec
             time_points = len(X)
             n_trials = int(time_points/trial_len)
             X = np.reshape(X[:n_trials*trial_len], (n_trials, trial_len))
@@ -114,7 +114,7 @@ class DNN():
         # multi class labels
         Labels_mc = np.zeros((n_samples, n_time, classes))
         for c in range(classes):
-            Labels_mc[:,:,c] = Labels==c
+            Labels_mc[:, :, c] = Labels == c
         Labels = Labels_mc
 
         # data shuffling 
