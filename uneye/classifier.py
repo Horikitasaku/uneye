@@ -72,7 +72,7 @@ class DNN():
         self.val_samples = val_samples
         self.doDiff = doDiff
 
-    def train(self,X,Y,Labels,seed=1):
+    def train(self, X, Y, Labels, seed=1):
         '''
         Train the model according to the given training data and store the trained weights.
         
@@ -88,31 +88,31 @@ class DNN():
         # set random seed
         np.random.seed(seed)
         torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed) #fixed seed to control random data shuffling in each epoch
+        torch.cuda.manual_seed_all(seed)  # fixed seed to control random data shuffling in each epoch
 
         # determine number of classes
-        classes = len(np.unique(Labels[np.isnan(Labels)==False]))
-        self.net = UNet(classes,self.ks,self.mp)
-        
+        classes = len(np.unique(Labels[np.isnan(Labels) == False]))
+        self.net = UNet(classes, self.ks, self.mp)
+
         print('Number of classes:',classes)
         print('Using GPU:',self.use_gpu)
         
         # check if data has right dimensions (2)
-        xdim,ydim,ldim = X.ndim,Y.ndim,Labels.ndim
-        if any((xdim!=2,ydim!=2,ldim!=2)):
+        xdim, ydim, ldim = X.ndim,Y.ndim,Labels.ndim
+        if any((xdim!=2, ydim!=2, ldim!=2)):
             # reshape into matrix with trials of length=1sec
-            trial_len = int(self.sampfreq) #trials of 1 sec
+            trial_len = int(self.sampfreq)  #trials of 1 sec
             time_points = len(X)
             n_trials = int(time_points/trial_len)
-            X = np.reshape(X[:n_trials*trial_len],(n_trials,trial_len))
-            Y = np.reshape(Y[:n_trials*trial_len],(n_trials,trial_len))
-            Labels = np.reshape(Labels[:n_trials*trial_len],(n_trials,trial_len))
+            X = np.reshape(X[:n_trials*trial_len], (n_trials, trial_len))
+            Y = np.reshape(Y[:n_trials*trial_len], (n_trials, trial_len))
+            Labels = np.reshape(Labels[:n_trials*trial_len], (n_trials, trial_len))
 
             
-        n_samples,n_time = X.shape
+        n_samples, n_time = X.shape
         
         # multi class labels
-        Labels_mc = np.zeros((n_samples,n_time,classes))
+        Labels_mc = np.zeros((n_samples, n_time, classes))
         for c in range(classes):
             Labels_mc[:,:,c] = Labels==c
         Labels = Labels_mc
@@ -126,58 +126,57 @@ class DNN():
         # check if number of timebins is multiple of the maxpooling kernel size squared, otherwise cut:
         n_time2 = X.shape[1]
         if n_time%(self.mp**2)!=0:
-            X = X[:,:int(np.floor(n_time/(self.mp**2))*(self.mp**2))]
-            Y = Y[:,:int(np.floor(n_time/(self.mp**2))*(self.mp**2))]
+            X = X[:, :int(np.floor(n_time/(self.mp**2))*(self.mp**2))]
+            Y = Y[:, :int(np.floor(n_time/(self.mp**2))*(self.mp**2))]
             Labels = Labels[:,:int(np.floor(n_time/(self.mp**2))*(self.mp**2)),:]
      
         # validation and training set
         # 50 samples of training data used for validation
-        n_validation = self.val_samples #fixed number of validation samples independent of number of training samples
+        n_validation = self.val_samples  # fixed number of validation samples independent of number of training samples
         n_training = n_samples - n_validation
-        Xval = X[:n_validation,:]
-        Yval = Y[:n_validation,:]
-        Lval = Labels[:n_validation,:]
-        Xtrain = X[n_validation:,:]
-        Ytrain = Y[n_validation:,:]
-        Ltrain = Labels[n_validation:,:]
+        Xval = X[:n_validation, :]
+        Yval = Y[:n_validation, :]
+        Lval = Labels[:n_validation, :]
+        Xtrain = X[n_validation:, :]
+        Ytrain = Y[n_validation:, :]
+        Ltrain = Labels[n_validation:, :]
 
-        if self.augmentation==True:
+        if self.augmentation is True:
             # data augmentation: signal rotation
-            theta = np.arange(0.25,2,0.5)
-            r = np.sqrt(Xtrain**2+Ytrain**2)
+            theta = np.arange(0.25, 2, 0.5)
+            r = np.sqrt(Xtrain ** 2 + Ytrain ** 2)
             x = Xtrain.copy()
             y = Ytrain.copy()
             for t in theta:
                 x2 = x.copy()*math.cos(np.pi * t) + y.copy()*math.sin(np.pi * t)
                 y2 = -x.copy()*math.sin(np.pi * t) + y.copy()*math.cos(np.pi * t)
-                Xtrain = np.concatenate((Xtrain.copy(),x2),0)
-                Ytrain = np.concatenate((Ytrain.copy(),y2),0)
-                Ltrain = np.concatenate((Ltrain,Ltrain),0)
+                Xtrain = np.concatenate((Xtrain.copy(), x2), 0)
+                Ytrain = np.concatenate((Ytrain.copy(), y2), 0)
+                Ltrain = np.concatenate((Ltrain, Ltrain), 0)
 
-                          
         n_training = Xtrain.shape[0]
 
-        if self.doDiff==True:
+        if self.doDiff is True:
             # Velocity:
             # training data
-            Xdiff = np.diff(Xtrain,axis=-1)
+            Xdiff = np.diff(Xtrain, axis=-1)
             Xdiff[np.isinf(Xdiff)] = self.inf_correction
             Xdiff[np.isnan(Xdiff)] = 0
-            Xin_train = np.concatenate((np.zeros((n_training,1)),Xdiff),1)
-            Ydiff = np.diff(Ytrain,axis=-1)
+            Xin_train = np.concatenate((np.zeros((n_training, 1)), Xdiff), 1)
+            Ydiff = np.diff(Ytrain, axis=-1)
             Ydiff[np.isnan(Ydiff)] = 0
             Ydiff[np.isinf(Ydiff)] = self.inf_correction
-            Yin_train = np.concatenate((np.zeros((n_training,1)),Ydiff),1)
+            Yin_train = np.concatenate((np.zeros((n_training, 1)), Ydiff), 1)
 
             # validation data
             Xdiff = np.diff(Xval,axis=-1)
             Xdiff[np.isinf(Xdiff)] = self.inf_correction
             Xdiff[np.isnan(Xdiff)] = 0
-            Xin_val = np.concatenate((np.zeros((n_validation,1)),Xdiff),1)
+            Xin_val = np.concatenate((np.zeros((n_validation, 1)), Xdiff), 1)
             Ydiff = np.diff(Yval,axis=-1)
             Ydiff[np.isnan(Ydiff)] = 0
             Ydiff[np.isinf(Ydiff)] = self.inf_correction
-            Yin_val = np.concatenate((np.zeros((n_validation,1)),Ydiff),1)
+            Yin_val = np.concatenate((np.zeros((n_validation, 1)), Ydiff), 1)
         else:
             # use input as it is
             Xin_train = Xtrain
@@ -288,7 +287,7 @@ class DNN():
             if len(Loss_val)>3:
                 if Loss_val[-1]<float(np.mean(Loss_val[-4:-1])): #validation performance better than average over last 3
                     getting_worse = 0
-                    if Loss_val[-1]<best_loss:
+                    if Loss_val[-1] < best_loss:
                         best_loss = Loss_val[-1]
                         uneye_weights = self.net.state_dict() #store weights
                         save_weights = True
@@ -309,8 +308,8 @@ class DNN():
                 self.net.load_state_dict(uneye_weights) #get back best weights
                 print('Early stopping at epoch '+str(epoch-1)+' before overfitting occurred.')
                 epoch = self.max_iter+1 
+            print(f'============{epoch}: Loss_val{Loss_val},Best_Loss{best_loss}============')
             epoch += 1
-  
         # validate after training to ensure saving best weights
         out_val = self.net(Vval,key)[0]
         # added this to convert values to numpy in GPU setting: 
